@@ -1,28 +1,44 @@
 # Multi-Agent Reinforcement Learning for Financial Resource Allocation
 
-A university RL + Multi-Agent Systems mini project with a working **Streamlit dashboard**: four independent
-tabular Q-learning agents (Growth, Conservative, Balanced, RiskLiquidity) split Rs 10,00,000 across
-**Equity / Bonds / Gold / Cash** inside one shared, simulated market.
+A university RL + Multi-Agent Systems mini project with a working web dashboard built for **Vercel**: a Next.js front end
+plus a stateless FastAPI (Python) function. Four independent tabular Q-learning agents (Growth, Conservative, Balanced,
+RiskLiquidity) split Rs 10,00,000 across **Equity / Bonds / Gold / Cash** inside one shared, simulated market.
 
 > **All data is synthetic.** Prices, returns and market regimes come from a simulated Markov-regime model
 > (`environment/market.py`). Nothing here is real market data, investment advice or a prediction, and results are not
 > real-world performance. The project has **no** real-money trading and **no** broker connection.
 
-**Status:** code is in this repository; tests listed below were actually run. The app has **not** been deployed to
-Streamlit Community Cloud from the authoring environment (it needs your GitHub login) - see
-[DEPLOYMENT.md](DEPLOYMENT.md) for the exact steps. There is no live URL yet.
+**Status:** the code is pushed to this repository and was tested locally (see [Tests](#tests)). It has **not been deployed
+to Vercel yet**: the attempt to create the Vercel project from the authoring environment was refused (HTTP 403, no access to
+the account scope), so there is no live URL. Follow [DEPLOYMENT.md](DEPLOYMENT.md) (about five minutes, no environment
+variables). Behaviour on real Vercel (cold start, bundle size, function timing) is therefore **unverified**.
 
 ---
 
-## Quick start
+## Architecture
 
+```
+Browser (Next.js / React)  --/api/*-->  api/index.py  ->  server/app.py (FastAPI, stateless)  ->  engine (numpy / pandas)
+```
+- The Python function keeps **no state between requests** (serverless). The simulation is rebuilt per request by replaying
+  `(seed, step list)`; trained agents travel as an opaque, validated `state` string (base64 of zlib-compressed JSON holding
+  Q-tables, visit counts, epsilons and RNG states) kept in the browser. Chunked training is bit-identical to one long run (tested).
+- The server returns UI "blocks" (headings, KPIs, tables, Plotly JSON ...) that a generic React renderer draws.
+- Training runs in chunks of 50 episodes per request (server cap 200, 20 s time guard) to fit Vercel's function limit.
+
+## Quick start (local)
+
+Requires Python 3.13 (3.11+ should work) and Node 20+.
 ```bash
 git clone https://github.com/vihaang123/multi-agent-finance.git && cd multi-agent-finance
 python -m venv .venv && source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-streamlit run streamlit_app.py                            # http://localhost:8501
+npm install
+uvicorn api.index:app --port 8000                         # terminal 1: the Python API
+LOCAL_API_URL=http://127.0.0.1:8000 npm run dev           # terminal 2: http://localhost:3000
 ```
-Tested with Python 3.13, Streamlit 1.65, Plotly 7.1, NumPy 2.5, pandas 3.0, matplotlib 3.11.
+On Windows PowerShell set the variable with `$env:LOCAL_API_URL="http://127.0.0.1:8000"; npm run dev`.
+Tested with Python 3.13, FastAPI 0.143, Plotly 7.1, NumPy 2.5, pandas 3.0, Node/Next.js 16.4.
 
 ## What is in the dashboard
 
@@ -79,18 +95,22 @@ episodes. Sharpe is **episode-scale, not annualised**.
 
 ## Repository layout
 ```
-streamlit_app.py            entry point (navigation, theme, synthetic-data banner)
-dashboard/                  pages/, charts.py (Plotly), session.py (start/pause/step/reset), views.py, state.py, theme.py, reference.py, lab_tools.py
+app/ components/ lib/       Next.js front end (pages: Dashboard, Simulation, RL Lab, Analytics, Experiments, Learn)
+api/index.py                Vercel Python entry point (imports the FastAPI app)
+server/                     app.py (endpoints), trainstate.py (portable training state), blocks.py, pages.py (UI blocks)
+dashboard/                  session.py (replayable simulation), charts.py (Plotly), views.py, theme.py, reference.py, lab_tools.py
 config.py                   single source of truth for all parameters
 environment/ agents/ rl/    market, portfolio, FinancialEnv, Q-learning agent and update rule (engine)
 training/ evaluation/       trainer; metrics.py and analytics.py
-experiments/                baseline agents, original runner, and engine.py (reproducible A-D API used by the app)
+experiments/                baseline agents, original runner, and engine.py (reproducible A-D API)
 scripts/build_reference.py  regenerates data/reference_results.json + reference_qtables.npz from a real run
 data/                       precomputed reference (clearly labelled in the UI)
-tests/                      pytest suite incl. Streamlit AppTest UI tests
+tests/                      pytest suite (+ tests/e2e Playwright browser tests)
+vercel.json  .python-version  requirements.txt  package.json  next.config.mjs
 docs/ENGINE_README.md       detailed engine write-up: bug history, analysis, limitations
-DEPLOYMENT.md  Dockerfile  requirements.txt  requirements-dev.txt  .streamlit/config.toml
+DEPLOYMENT.md               Vercel deployment steps
 ```
+The earlier Streamlit version was removed; it is recoverable from commit `2452936`.
 
 ## Reproducibility
 Everything is seeded. `RunConfig` + seeds fully determine a run (tests assert that the same config gives identical
@@ -100,16 +120,19 @@ experiment-D results exactly.
 ## Tests
 ```bash
 pip install -r requirements-dev.txt
-pytest -q                      # engine, analytics, session, charts, reference integrity, UI (AppTest)
+pytest -q                                   # engine, analytics, session, charts, reference, API, train-state
+npm run typecheck && npm run build          # front end
+# browser tests (need the app running, see tests/e2e/test_browser.py):
+E2E_BASE_URL=http://localhost:3000 pytest tests/e2e -q
 ```
-At the time of writing all 134 tests passed in a fresh virtual environment built from `requirements-dev.txt`
-(Python 3.13; 40 original engine tests + 63 new engine/session/chart/reference tests + 31 UI tests).
-The UI tests execute the real app script, click the real buttons and check the resulting state; they do not replace
-trying the app yourself in a browser.
+What was actually run in the authoring environment: `pytest -q` -> **138 passed, 11 skipped** (the 11 skipped are the browser
+tests when no server is configured); the 11 Playwright browser tests passed against a local uvicorn + `next start`;
+`tsc --noEmit` and `next build` passed. **Not run:** anything against a real Vercel deployment.
 
 ## Known limitations
 - Tabular Q-learning, 7 predefined baskets and coarse buckets: simple by design, no generalisation across states.
 - No role specialization emerges (see above). Shared / hybrid rewards, a shared capital pool, reward ablations and hyper-parameter
   sweeps are **not** implemented.
-- Live training in the app is capped (3,000 episodes, 150 s) to suit free hosting.
-- Docker image is provided but was not built in the authoring environment; Community Cloud deployment has not been performed.
+- Live training in the app is capped (3,000 episodes in the RL Lab, 50 episodes per request) because Vercel functions are time-limited.
+  Trained agents live in the browser tab only: reloading the page resets to the precomputed reference agents.
+- Not yet deployed to Vercel (see Status).
