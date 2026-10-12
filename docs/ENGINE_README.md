@@ -1,3 +1,5 @@
+> **Engine notes (Baseline V1).** This is the detailed engineering write-up of the RL engine (environment, agents, bug history, results & analysis). The dashboard is documented in the top-level [README](../README.md). Figures printed by `python -m experiments.run_experiments` measure return from the first post-step capital; the dashboard measures from the true initial capital, so its numbers differ slightly (e.g. experiment D: +3.18% vs +3.20%). Paths below are relative to the repository root.
+
 # Multi-Agent Reinforcement Learning for Financial Resource Allocation
 
 A university RL + Multi-Agent Systems mini-project: four independent tabular
@@ -14,7 +16,6 @@ later deliverables.
 ## 1. Quickstart
 
 ```bash
-cd multi_agent_finance
 pip install -r requirements.txt
 
 # Run the full test suite (30 tests, ~0.3s)
