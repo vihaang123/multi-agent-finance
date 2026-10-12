@@ -1,4 +1,4 @@
-"""Tests for dashboard.session.SimulationSession (start/pause/step/reset semantics, policies)."""
+"""Tests for dashboard.session.SimulationSession (step/reset/replay semantics, policies)."""
 
 import copy
 
@@ -46,7 +46,7 @@ def test_reset_restores_initial_state_and_same_path(trained_agents):
     first = s.capital_series().copy()
     regimes = s.regime_path()
     s.reset()
-    assert s.t == 0 and s.history == [] and not s.done and not s.running
+    assert s.t == 0 and s.history == [] and not s.done
     assert np.allclose(s.capital_series(), [sum(s.capitals.values())])
     s.run_to_end()
     assert np.allclose(s.capital_series(), first) and s.regime_path() == regimes     # deterministic replay
@@ -61,13 +61,51 @@ def test_reset_with_new_seed_changes_market(trained_agents):
     assert s.seed == 2 and s.regime_path() != a
 
 
-def test_running_flag_semantics(trained_agents):
-    s = SimulationSession(trained_agents, seed=5, episode_length=3)
-    s.running = True
-    s.run_to_end()
-    assert s.done and s.running is False             # finishing stops auto-play
-    s.reset()
-    assert s.running is False
+def test_replay_reproduces_the_live_session_exactly(trained_agents):
+    """Stateless API contract: rebuilding from the client-held steps == the session that produced them."""
+    live = SimulationSession(trained_agents, seed=52, episode_length=30)
+    live.set_policy(1, "random")
+    live.set_policy(2, "fixed", 5)
+    live.run_steps(12)
+    live.set_policy(2, "trained")           # policy change mid-run
+    live.run_steps(9)
+    rebuilt = SimulationSession(trained_agents, seed=52, episode_length=30).replay(live.steps)
+    assert rebuilt.t == live.t == 21 and rebuilt.steps == live.steps
+    assert np.allclose(rebuilt.capital_series(), live.capital_series())
+    assert rebuilt.regime_path() == live.regime_path()
+    assert rebuilt.last["policy_kind"] == live.last["policy_kind"]
+    for a in AGENT_IDS:
+        q1, q2 = rebuilt.last["q_values"][a], live.last["q_values"][a]
+        assert (q1 is None) == (q2 is None) and (q1 is None or np.allclose(q1, q2))
+    # advancing the rebuilt copy (given the same policy settings) continues exactly like the original
+    rebuilt.policy_spec = {a: dict(v) for a, v in live.policy_spec.items()}
+    live.run_to_end(); rebuilt.run_to_end()
+    assert np.allclose(rebuilt.capital_series(), live.capital_series())
+
+
+def test_decisions_do_not_depend_on_request_boundaries(trained_agents):
+    """Stepping 1+1+... in separate (rebuilt) sessions == stepping straight through."""
+    straight = SimulationSession(trained_agents, seed=70, episode_length=25)
+    straight.set_policy(3, "random")
+    straight.run_to_end()
+    steps = []
+    for _ in range(25):
+        s = SimulationSession(trained_agents, seed=70, episode_length=25)
+        s.set_policy(3, "random")
+        s.replay(steps)
+        s.step()
+        steps = s.steps
+    assert steps == straight.steps
+
+
+def test_replay_validation(trained_agents):
+    s = SimulationSession(trained_agents, seed=1, episode_length=3)
+    with pytest.raises(ValueError):
+        s.replay([{"a": [0, 0, 0, 99], "k": "tttt"}])
+    with pytest.raises(ValueError):
+        s.replay([{"a": [0, 0], "k": "tt"}])
+    with pytest.raises(ValueError):
+        s.replay([{"a": [0, 0, 0, 0], "k": "tttt"}] * 4)
 
 
 def test_watching_never_trains_the_agents(trained_agents):

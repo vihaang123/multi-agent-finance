@@ -44,17 +44,26 @@ def _empty(msg: str, height: int = 260) -> go.Figure:
 
 
 def add_regime_bands(fig: go.Figure, regimes: Sequence[int], x0: int = 1, row=None, col=None, legend=True):
-    """Shade contiguous runs of the same market regime; x of regimes[i] is x0+i."""
+    """Shade contiguous runs of the same market regime; x of regimes[i] is x0+i.
+
+    The rectangles are added in ONE update (not one add_vrect call per run): validating dozens of shapes one at a
+    time dominated the API's response time."""
     if len(regimes) == 0:
         return fig
-    start = 0
+    start, shapes = 0, []
     kw = {} if row is None else dict(row=row, col=col)
+    xref, yref = ("x", "y domain") if row is None else (None, None)
+    if row is not None:
+        sp = fig.get_subplot(row, col)
+        xref = sp.xaxis.plotly_name.replace("axis", "")
+        yref = sp.yaxis.plotly_name.replace("axis", "") + " domain"
     for i in range(1, len(regimes) + 1):
         if i == len(regimes) or regimes[i] != regimes[start]:
             name = cfg.REGIME_NAMES[regimes[start]]
-            fig.add_vrect(x0=x0 + start - 0.5, x1=x0 + i - 0.5, fillcolor=theme.REGIME_COLORS[name],
-                          opacity=0.10, line_width=0, layer="below", **kw)
+            shapes.append(dict(type="rect", xref=xref, yref=yref, x0=x0 + start - 0.5, x1=x0 + i - 0.5, y0=0, y1=1,
+                               fillcolor=theme.REGIME_COLORS[name], opacity=0.10, line=dict(width=0), layer="below"))
             start = i
+    fig.update_layout(shapes=list(fig.layout.shapes) + shapes)
     if legend:
         for name in cfg.REGIME_NAMES:
             if cfg.REGIME_NAMES.index(name) in set(regimes):

@@ -9,11 +9,11 @@ app still works; it just starts with untrained agents and no reference table.
 """
 
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Optional
 
 import numpy as np
-import streamlit as st
 
 import config as cfg
 from agents.q_learning_agent import QLearningAgent
@@ -24,7 +24,7 @@ RESULTS_PATH = DATA_DIR / "reference_results.json"
 QTABLES_PATH = DATA_DIR / "reference_qtables.npz"
 
 
-@st.cache_data(show_spinner=False)
+@lru_cache(maxsize=1)
 def load_reference_results() -> Optional[dict]:
     try:
         with open(RESULTS_PATH, "r") as f:
@@ -33,7 +33,7 @@ def load_reference_results() -> Optional[dict]:
         return None
 
 
-@st.cache_data(show_spinner=False)
+@lru_cache(maxsize=1)
 def _load_qtables() -> Optional[dict]:
     try:
         with np.load(QTABLES_PATH) as z:

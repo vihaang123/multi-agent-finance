@@ -1,9 +1,9 @@
-# Runtime dependencies for the engine and the Streamlit dashboard.
-# Developed and tested with: Python 3.13, streamlit 1.65.0, plotly 7.1.0, numpy 2.5.3, pandas 3.0.5, matplotlib 3.11.2.
-# The lower bounds below are the oldest versions the code is expected to work with; versions older than the tested
-# ones above have NOT been run.
-streamlit>=1.65,<2
+# Runtime dependencies of the Python API (deployed on Vercel as a serverless function) and of the engine.
+# Tested with: Python 3.13, fastapi 0.143.0, pydantic 2.13.5, numpy 2.5.3, pandas 3.0.5, plotly 7.1.0.
+# The lower bounds are the oldest versions expected to work; versions older than the tested ones have NOT been run.
+# matplotlib is NOT here on purpose: it is only used by the optional command-line plot script (see requirements-dev.txt),
+# and leaving it out keeps the serverless bundle small.
+fastapi>=0.115,<1
+numpy>=1.26
+pandas>=2.1
 plotly>=6.0,<8
-numpy>=1.24
-pandas>=2.0
-matplotlib>=3.7

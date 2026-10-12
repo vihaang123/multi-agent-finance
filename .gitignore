@@ -5,3 +5,10 @@ __pycache__/
 venv/
 .DS_Store
 .streamlit/secrets.toml
+
+# Node / Next.js
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+.vercel

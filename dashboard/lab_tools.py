@@ -1,9 +1,9 @@
 """
-dashboard/lab_tools.py - helpers for the RL Lab page that do not need Streamlit.
+dashboard/lab_tools.py - helpers for the RL Lab views (policy summary and the Q-update walkthrough).
+Training itself lives in server/trainstate.py.
 """
 
 import copy
-import time
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -11,55 +11,8 @@ import pandas as pd
 
 import config as cfg
 from environment.state_utils import describe_state
-from experiments.engine import QHyperParams, build_q_agents, make_env
+from experiments.engine import make_env
 from experiments.run_experiments import AGENT_IDS, AGENT_ROLES
-from training.trainer import Trainer
-
-TIME_BUDGET_SECONDS = 150.0
-
-
-def new_trainer(hp: QHyperParams, seed: int, episode_length: int, enable_market_impact: bool):
-    caps = {a: cfg.INITIAL_CAPITAL_PER_AGENT for a in AGENT_IDS}
-    agents = build_q_agents(AGENT_IDS, AGENT_ROLES, hp, seed)
-    env = make_env(AGENT_IDS, AGENT_ROLES, caps, seed, episode_length, cfg.REWARD_MODE, enable_market_impact)
-    return Trainer(env, agents), agents
-
-
-def trainer_for_existing(agents, seed: int, episode_length: int, enable_market_impact: bool):
-    caps = {a: cfg.INITIAL_CAPITAL_PER_AGENT for a in AGENT_IDS}
-    env = make_env(AGENT_IDS, AGENT_ROLES, caps, seed, episode_length, cfg.REWARD_MODE, enable_market_impact)
-    return Trainer(env, agents)
-
-
-def apply_hyperparams(agents, hp: QHyperParams):
-    """Change the learning-rule hyperparameters of agents that already exist
-    (used when continuing training). Does not touch Q-tables."""
-    for ag in agents.values():
-        ag.alpha, ag.gamma = hp.alpha, hp.gamma
-        ag.epsilon_min, ag.epsilon_decay = hp.epsilon_min, hp.epsilon_decay
-        ag.epsilon = max(hp.epsilon_min, min(ag.epsilon, 1.0))
-
-
-def train_chunked(trainer: Trainer, n_episodes: int, episode_offset: int = 0, progress=None,
-                  time_budget: float = TIME_BUDGET_SECONDS):
-    """Run up to n_episodes in chunks. progress(done, total) is called between chunks.
-    Stops early (and says so) if the wall-clock budget is exceeded.
-    Returns (training DataFrame, episodes_completed, stopped_early)."""
-    if n_episodes < 1:
-        raise ValueError("n_episodes must be >= 1")
-    chunk = max(1, n_episodes // 50)
-    t0, done, frames = time.time(), 0, []
-    stopped = False
-    while done < n_episodes:
-        k = min(chunk, n_episodes - done)
-        frames.append(trainer.train(k, verbose=False, episode_offset=episode_offset + done))
-        done += k
-        if progress is not None:
-            progress(done, n_episodes)
-        if time.time() - t0 > time_budget and done < n_episodes:
-            stopped = True
-            break
-    return pd.concat(frames, ignore_index=True), done, stopped
 
 
 def greedy_policy_by_regime(agent) -> pd.DataFrame:

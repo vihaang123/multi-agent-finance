@@ -1,6 +1,15 @@
 """
 dashboard/session.py - SimulationSession: a steppable run of the REAL
-FinancialEnv, with start / pause / step / reset semantics.
+FinancialEnv.
+
+The web API is STATELESS (Vercel serverless functions keep no memory between
+requests), so a session is rebuilt on every request from (seed, market-impact
+flag, the actions already taken) by `replay()`, and then advanced with `step()`.
+Because the environment is deterministic given its seed and the actions, the
+rebuilt session is identical to the one the user was watching.
+All per-step randomness used by the *policies* (tie-breaking among equal
+Q-values, the random policy) is derived from (seed, step, agent), never from a
+stream that depends on how many requests came before.
 
 The session never re-implements market, portfolio or reward maths; it only
 calls FinancialEnv.step() and records everything the engine reports. Agents
@@ -8,8 +17,8 @@ are held by reference and are NEVER updated here (watching a simulation does
 not train anyone) -- training happens only on the RL Lab page.
 
 Policies (chosen per agent, changeable between steps):
-  * "trained" : greedy argmax over the agent's Q-row (ties broken with a
-                session-local RNG so the agent's own RNG is untouched)
+  * "trained" : greedy argmax over the agent's Q-row (ties broken with an RNG
+                derived from seed/step/agent, so the agent's own RNG is untouched)
   * "random"  : uniform random basket
   * "fixed"   : a basket index you choose (also serves as manual control)
 
@@ -29,6 +38,8 @@ from environment.state_utils import describe_state
 from experiments.run_experiments import AGENT_IDS, AGENT_ROLES
 
 POLICY_KINDS = ("trained", "random", "fixed")
+POLICY_CODES = {"trained": "t", "random": "r", "fixed": "f"}
+CODE_TO_KIND = {v: k for k, v in POLICY_CODES.items()}
 POLICY_LABELS = {"trained": "Trained Q-learning (greedy)", "random": "Random basket", "fixed": "Fixed / manual basket"}
 
 
@@ -47,7 +58,6 @@ class SimulationSession:
         self.enable_market_impact = bool(enable_market_impact)
         self.policy_spec = {a: {"kind": "trained" if (a in self.agents and hasattr(self.agents[a], "q_table")) else "random",
                                 "basket": 2} for a in self.agent_ids}
-        self.running = False
         self.reset()
 
     # ------------------------------------------------------------------ #
@@ -62,10 +72,8 @@ class SimulationSession:
         self.states = self.env.reset()
         self.t = 0
         self.done = False
-        self.running = False
         self.history: List[dict] = []
-        self._tie_rng = np.random.default_rng(self.seed + 9999)
-        self._rand_rng = np.random.default_rng(self.seed + 7777)
+        self.steps: List[dict] = []          # [{"a": [action per agent], "k": "tfrt"}] - what the client keeps
         self.initial_regime = self.env.market.regime
 
     def set_policy(self, aid: int, kind: str, basket: Optional[int] = None):
@@ -84,6 +92,10 @@ class SimulationSession:
         return self.env.market.regime
 
     # ------------------------------------------------------------------ #
+    def _q_row(self, aid: int):
+        agent = self.agents.get(aid)
+        return agent.q_values(self.states[aid]) if agent is not None and hasattr(agent, "q_table") else None
+
     def _decide(self, aid: int):
         spec = self.policy_spec[aid]
         state = self.states[aid]
@@ -91,21 +103,36 @@ class SimulationSession:
         if spec["kind"] == "trained":
             agent = self.agents[aid]
             q = agent.q_values(state)
-            action = agent.greedy_action(state, rng=self._tie_rng)
+            action = agent.greedy_action(state, rng=np.random.default_rng([self.seed, self.t, aid, 1]))
         elif spec["kind"] == "random":
-            action = int(self._rand_rng.integers(0, cfg.N_ACTIONS))
+            action = int(np.random.default_rng([self.seed, self.t, aid, 2]).integers(0, cfg.N_ACTIONS))
         else:
             action = int(spec["basket"])
         return action, q
 
-    def step(self) -> Optional[dict]:
-        """Advance one environment step. Returns the recorded row (None if finished)."""
+    def step(self, forced: Optional[List[dict]] = None) -> Optional[dict]:
+        """Advance one environment step. Returns the recorded row (None if finished).
+
+        `forced` (used when replaying a client-held history) is {"a": [...], "k": "tfrt"}: the actions
+        and policy kinds that were really used at this step, so they are re-applied rather than re-decided."""
         if self.done:
-            self.running = False
             return None
         decisions, qvals, states = {}, {}, dict(self.states)
-        for aid in self.agent_ids:
-            decisions[aid], qvals[aid] = self._decide(aid)
+        kinds = {}
+        if forced is not None:
+            acts, kcodes = forced["a"], forced["k"]
+            if len(acts) != len(self.agent_ids) or len(kcodes) != len(self.agent_ids):
+                raise ValueError("replayed step has the wrong number of agents")
+            for i, aid in enumerate(self.agent_ids):
+                a = int(acts[i])
+                if not 0 <= a < cfg.N_ACTIONS:
+                    raise ValueError(f"replayed action {a} out of range")
+                decisions[aid], kinds[aid] = a, CODE_TO_KIND.get(kcodes[i], "fixed")
+                qvals[aid] = self._q_row(aid) if kinds[aid] == "trained" else None
+        else:
+            for aid in self.agent_ids:
+                decisions[aid], qvals[aid] = self._decide(aid)
+                kinds[aid] = self.policy_spec[aid]["kind"]
 
         regime_before = self.env.market.regime
         next_states, rewards, done, info = self.env.step(decisions)
@@ -123,7 +150,7 @@ class SimulationSession:
             "regime_before": regime_before,
             "states": states, "state_desc": {a: describe_state(states[a]) for a in self.agent_ids},
             "q_values": qvals,
-            "policy_kind": {a: self.policy_spec[a]["kind"] for a in self.agent_ids},
+            "policy_kind": dict(kinds),
             "target_weights": {a: info["target_weights"][a].copy() for a in self.agent_ids},
             "asset_values_pre": {a: info["asset_values_pre"][a].copy() for a in self.agent_ids},
             "asset_values": {a: info["asset_values"][a].copy() for a in self.agent_ids},
@@ -132,11 +159,21 @@ class SimulationSession:
             "reward_components": info["reward_components"], "risk_exposure": dict(info["risk_exposure"]),
         }
         self.history.append(row)
+        self.steps.append({"a": [int(decisions[a]) for a in self.agent_ids],
+                           "k": "".join(POLICY_CODES[kinds[a]] for a in self.agent_ids)})
         self.states = next_states
         self.done = bool(done)
-        if self.done:
-            self.running = False
         return row
+
+    def replay(self, steps: List[dict]) -> "SimulationSession":
+        """Re-apply a client-held list of steps (see step()). Starts from step 0."""
+        if len(steps) > self.episode_length:
+            raise ValueError("more steps than the episode length")
+        self.reset()
+        for st_ in steps:
+            if self.step(forced=st_) is None:
+                raise ValueError("replay continued past the end of the episode")
+        return self
 
     def run_steps(self, n: int) -> int:
         done_steps = 0

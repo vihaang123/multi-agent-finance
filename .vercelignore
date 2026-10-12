@@ -1,7 +1,10 @@
+node_modules
+.next
 .git
+.venv
 __pycache__
 *.pyc
 .pytest_cache
-results/plots
+results
 tests
 docs

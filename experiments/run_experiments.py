@@ -29,7 +29,6 @@ from agents.q_learning_agent import QLearningAgent
 from experiments.baseline import RandomAgent, FixedAgent
 from training.trainer import Trainer
 from evaluation import metrics
-from visualization import plots
 
 
 AGENT_IDS = [0, 1, 2, 3]
@@ -232,6 +231,8 @@ def run_experiment_D_independent_qlearning(num_episodes: int, seed: int = cfg.TR
 
 
 def main(num_episodes: int = cfg.NUM_EPISODES, seed: int = cfg.TRAIN_SEED):
+    # Imported lazily: the web API (Vercel) never needs matplotlib, only this CLI run does.
+    from visualization import plots
     os.makedirs(cfg.RESULTS_DIR, exist_ok=True)
     os.makedirs(cfg.PLOTS_DIR, exist_ok=True)
 
