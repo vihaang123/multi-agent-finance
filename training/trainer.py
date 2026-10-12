@@ -29,6 +29,8 @@ class Trainer:
         done = False
         episode_reward = {aid: 0.0 for aid in self.agent_ids}
         action_counts = {aid: np.zeros(cfg.N_ACTIONS, dtype=int) for aid in self.agent_ids}
+        td_abs_sum = {aid: 0.0 for aid in self.agent_ids}
+        n_steps = 0
         trajectory = [] if collect_trajectory else None
 
         while not done:
@@ -39,6 +41,8 @@ class Trainer:
                 self.agents[aid].update(states[aid], actions[aid], rewards[aid], next_states[aid], done)
                 episode_reward[aid] += rewards[aid]
                 action_counts[aid][actions[aid]] += 1
+                td_abs_sum[aid] += abs(getattr(self.agents[aid], "last_td_error", 0.0))
+            n_steps += 1
 
             if collect_trajectory:
                 trajectory.append({
@@ -49,6 +53,7 @@ class Trainer:
                     "actual_weights": {aid: info["actual_weights"][aid].copy() for aid in self.agent_ids},
                     "actions": dict(actions),
                     "rewards": dict(rewards),
+                    "txcost": dict(info["txcost"]),
                 })
 
             states = next_states
@@ -66,24 +71,31 @@ class Trainer:
             "final_drawdown": final_drawdown,
             "epsilons": epsilons,
             "action_counts": action_counts,
+            "mean_abs_td": {aid: td_abs_sum[aid] / max(1, n_steps) for aid in self.agent_ids},
         }
         if collect_trajectory:
             result["trajectory"] = trajectory
         return result
 
-    def train(self, num_episodes: int = cfg.NUM_EPISODES, log_every: int = 100, verbose: bool = True) -> pd.DataFrame:
+    def train(self, num_episodes: int = cfg.NUM_EPISODES, log_every: int = 100, verbose: bool = True,
+              progress_callback=None, episode_offset: int = 0) -> pd.DataFrame:
+        """progress_callback(done, total, row) is called after every episode (used by the
+        dashboard's progress bar); episode_offset numbers episodes when continuing a run."""
         rows: List[dict] = []
         for ep in range(num_episodes):
             result = self.run_episode(collect_trajectory=False)
-            row = {"episode": ep}
+            row = {"episode": ep + episode_offset}
             for aid in self.agent_ids:
                 row[f"reward_{aid}"] = result["episode_reward"][aid]
                 row[f"capital_{aid}"] = result["final_capital"][aid]
                 row[f"drawdown_{aid}"] = result["final_drawdown"][aid]
                 row[f"epsilon_{aid}"] = result["epsilons"][aid]
+                row[f"td_{aid}"] = result["mean_abs_td"][aid]
             row["total_reward"] = sum(result["episode_reward"].values())
             row["total_capital"] = sum(result["final_capital"].values())
             rows.append(row)
+            if progress_callback is not None:
+                progress_callback(ep + 1, num_episodes, row)
 
             if verbose and (ep + 1) % log_every == 0:
                 mean_recent = np.mean([r["total_reward"] for r in rows[-log_every:]])

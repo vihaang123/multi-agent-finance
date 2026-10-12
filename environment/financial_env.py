@@ -137,6 +137,9 @@ class FinancialEnv:
         }
 
         # --- 5. Apply market returns to every sleeve ---
+        # (instrumentation only: rupee value held in each asset right after
+        #  rebalancing and BEFORE this step's returns hit)
+        asset_values_pre = {aid: self.portfolios[aid].asset_values.copy() for aid in self.agent_ids}
         total_capital_before_returns = sum(self.portfolios[aid].capital for aid in self.agent_ids)
         for aid in self.agent_ids:
             self.portfolios[aid].apply_returns(adjusted_returns)
@@ -154,18 +157,26 @@ class FinancialEnv:
         # --- 6. Per-agent reward ---
         rewards = {}
         individual_rewards = {}
+        reward_components = {}
         for aid in self.agent_ids:
             role = self.agent_roles[aid]
             w = cfg.REWARD_WEIGHTS[role]
             port = self.portfolios[aid]
-            r_i = (
-                w["alpha"] * port.last_log_return * cfg.REWARD_SCALE
-                - w["beta"] * risk_exposure[aid] * cfg.REWARD_SCALE
-                - w["lam"] * txcost_frac[aid] * cfg.REWARD_SCALE
-                - w["delta"] * port.drawdown_increase * cfg.REWARD_SCALE
-                + w["liquidity_mu"] * target_weights[aid][cfg.CASH]
-            )
+            # Reward = the SAME five terms, in the SAME evaluation order, as before;
+            # they are just also kept individually so the dashboard can display them.
+            comp_return = w["alpha"] * port.last_log_return * cfg.REWARD_SCALE
+            comp_risk = w["beta"] * risk_exposure[aid] * cfg.REWARD_SCALE
+            comp_tx = w["lam"] * txcost_frac[aid] * cfg.REWARD_SCALE
+            comp_dd = w["delta"] * port.drawdown_increase * cfg.REWARD_SCALE
+            comp_liq = w["liquidity_mu"] * target_weights[aid][cfg.CASH]
+            r_i = comp_return - comp_risk - comp_tx - comp_dd + comp_liq
+            r_unclipped = float(r_i)
             r_i = float(np.clip(r_i, -cfg.REWARD_CLIP, cfg.REWARD_CLIP))
+            reward_components[aid] = {
+                "return": float(comp_return), "risk": -float(comp_risk), "transaction": -float(comp_tx),
+                "drawdown": -float(comp_dd), "liquidity": float(comp_liq),
+                "unclipped": r_unclipped, "clipped": r_i,
+            }
             individual_rewards[aid] = r_i
 
             if self.reward_mode == "individual":
@@ -207,6 +218,15 @@ class FinancialEnv:
             "drawdown_increase": {aid: self.portfolios[aid].drawdown_increase for aid in self.agent_ids},
             "txcost_frac": txcost_frac,
             "risk_exposure": risk_exposure,
+            # ---- additive dashboard instrumentation (does not affect any maths) ----
+            "base_returns": base_returns.copy(),          # raw draw for the current regime (exogenous)
+            "asset_returns": adjusted_returns.copy(),      # after market impact on equity
+            "asset_values_pre": asset_values_pre,          # Rs per asset after rebalance, before returns
+            "asset_values": {aid: self.portfolios[aid].asset_values.copy() for aid in self.agent_ids},
+            "asset_pnl": {aid: self.portfolios[aid].last_asset_pnl.copy() for aid in self.agent_ids},
+            "txcost": {aid: txcost_frac[aid] * pre_rebalance_capital[aid] for aid in self.agent_ids},
+            "reward_components": reward_components,
+            "shared_reward": shared_reward,
         }
         return next_states, rewards, done, info
 

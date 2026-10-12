@@ -39,6 +39,9 @@ class QLearningAgent(BaseAgent):
         self.epsilon_decay = epsilon_decay
         self.rng = np.random.default_rng(seed)
         self.last_td_error = 0.0
+        # Dashboard instrumentation (never read by the learning rule):
+        self.visit_counts = np.zeros((n_states, n_actions), dtype=np.int64)
+        self.n_updates = 0
 
     def select_action(self, state: int) -> int:
         return epsilon_greedy_action(self.q_table, state, self.epsilon, self.n_actions, self.rng)
@@ -47,6 +50,22 @@ class QLearningAgent(BaseAgent):
         self.last_td_error = q_update(
             self.q_table, state, action, reward, next_state, done, self.alpha, self.gamma
         )
+        self.visit_counts[state, action] += 1
+        self.n_updates += 1
 
     def on_episode_end(self):
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+
+    # ---- read-only helpers used by the dashboard (do not touch learning state) ----
+    def q_values(self, state: int) -> np.ndarray:
+        """Copy of the Q-values Q(state, .) for all actions."""
+        return self.q_table[state].copy()
+
+    def greedy_action(self, state: int, rng=None) -> int:
+        """argmax_a Q(state, a). Ties broken randomly with the supplied rng
+        (so calling this never consumes the agent's own RNG stream)."""
+        row = self.q_table[state]
+        best = np.flatnonzero(row == row.max())
+        if len(best) == 1 or rng is None:
+            return int(best[0])
+        return int(rng.choice(best))

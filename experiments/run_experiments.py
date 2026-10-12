@@ -88,6 +88,8 @@ def evaluate_out_of_sample(
                 "actual_weights": {aid: info["actual_weights"][aid].copy() for aid in agent_ids},
                 "actions": dict(actions),
                 "rewards": dict(rewards),
+                "txcost": dict(info["txcost"]),
+                "asset_pnl": {aid: info["asset_pnl"][aid].copy() for aid in agent_ids},
             })
             states = next_states
         trajectories.append(trajectory)

@@ -33,6 +33,9 @@ class Portfolio:
         self.last_log_return = 0.0
         self.prev_drawdown = 0.0
         self.drawdown_increase = 0.0
+        # Dashboard instrumentation (read-only record, never fed back into the maths):
+        # rupee P&L earned by each asset sleeve during the most recent step.
+        self.last_asset_pnl = np.zeros(cfg.N_ASSETS)
         self.history = [self.initial_capital]
 
     @property
@@ -69,7 +72,9 @@ class Portfolio:
     def apply_returns(self, asset_returns: np.ndarray):
         """Apply one step of realised asset returns to the sleeve."""
         pre_capital = self.capital
+        values_before = self.asset_values.copy()
         self.asset_values = self.asset_values * (1.0 + asset_returns)
+        self.last_asset_pnl = self.asset_values - values_before
         self.capital = float(np.sum(self.asset_values))
         self.peak_capital = max(self.peak_capital, self.capital)
         self.last_return = (self.capital - pre_capital) / pre_capital if pre_capital > 0 else 0.0
