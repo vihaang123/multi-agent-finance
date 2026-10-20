@@ -11,7 +11,11 @@ RiskLiquidity) split Rs 10,00,000 across **Equity / Bonds / Gold / Cash** inside
 **Status:** deployed on Vercel at <https://multi-agent-finance-eight.vercel.app/> (project linked to this GitHub repository, so every
 push to `main` redeploys). The deployment was checked by hand in Chrome page by page (Dashboard, Simulation, RL Lab training and
 evaluation, Analytics, Experiments live run, Learn) on the version before the redesign. The redesign described below was tested
-locally (see "Tests" for exactly what was run). See [DEPLOYMENT.md](DEPLOYMENT.md).
+locally (see "Tests"), and after it deployed the same pages were checked again by hand on the live URL in Chrome: dashboard (ribbon,
+dark theme, scoreboard), simulation (step, play/pause, shortcuts, all four views), RL Lab (train, saved after reload, inspector, policy
+maps, walkthrough, evaluation, reset), analytics (all views plus the out-of-sample run), a live experiments run, and the Learn tabs.
+The automated browser suite was run against the local build only (the authoring sandbox cannot reach vercel.app), and the phone-width
+layout was checked locally, not on the live site. See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ---
 
