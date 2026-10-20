@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Blocks } from "@/components/Blocks";
-import { Button, ErrorBox, NumberField, Spinner } from "@/components/Controls";
+import { Button, ErrorBox, NumberField, Skeleton } from "@/components/Controls";
 import { PageHeader } from "@/components/PageHeader";
+import { RegimeRibbon } from "@/components/RegimeRibbon";
 import { useSimulation } from "@/lib/hooks";
 import { useMeta, useStore } from "@/lib/store";
 
@@ -30,13 +31,14 @@ export default function DashboardPage() {
           Run a full episode
         </Button>
         <Button disabled={busy} onClick={() => call({ sim: { ...sim, seed, steps: [] } })}>Clear (step 0)</Button>
-        <Link className="btn" href="/simulation" style={{ textDecoration: "none", textAlign: "center" }}>Step through it in the Simulation page</Link>
+        <Link className="btn" href="/simulation" style={{ textDecoration: "none", textAlign: "center" }}>Open in Simulation</Link>
       </div>
       <p className="small muted">
         Agents: <b>{agents.label}</b> &nbsp;|&nbsp; Market seed <b>{resp?.seed ?? sim.seed}</b> &nbsp;|&nbsp; {resp?.summary_line ?? "..."}
       </p>
       <ErrorBox message={error} />
-      {!resp && busy ? <Spinner text="Simulating an episode..." /> : null}
+      {!resp && busy ? <Skeleton text="Simulating an episode..." /> : null}
+      {resp ? <RegimeRibbon regimes={resp.regimes} total={meta.episode_length} /> : null}
       <div style={{ opacity: busy && resp ? 0.6 : 1, transition: "opacity .15s" }}>
         <Blocks blocks={blocks} />
       </div>

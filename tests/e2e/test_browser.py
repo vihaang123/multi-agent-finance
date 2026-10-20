@@ -249,3 +249,58 @@ def test_mobile_layout_has_no_horizontal_scroll(browser):
     time.sleep(1)
     shot(pg, "mobile_dashboard")
     ctx.close()
+
+
+def test_dashboard_has_regime_ribbon_and_experiment_scoreboard(page):
+    go(page, "/")
+    page.wait_for_selector(".kpi")
+    assert page.locator(".ribbon:not(.mini) .cell").count() == 100
+    assert page.locator(".ribbon-legend").inner_text().count("Bull") == 1
+    page.wait_for_selector("text=Where the learning ended up")
+    assert "did NOT beat the fixed Balanced basket" in page.inner_text("main")   # the honest finding stays visible
+    shot(page, "dashboard_scoreboard")
+
+
+def test_theme_toggle_is_remembered_across_reloads(page):
+    go(page, "/")
+    page.get_by_role("button", name="Dark").click()
+    assert page.evaluate("document.documentElement.getAttribute('data-theme')") == "dark"
+    page.wait_for_selector(".js-plotly-plot")
+    page.reload()
+    page.wait_for_selector("main .syn-banner")
+    assert page.evaluate("document.documentElement.getAttribute('data-theme')") == "dark"
+    shot(page, "dark_dashboard")
+    page.get_by_role("button", name="Auto").click()
+    assert page.evaluate("document.documentElement.getAttribute('data-theme')") is None
+
+
+def test_trained_agents_survive_a_reload_and_can_be_reset(page):
+    go(page, "/rl-lab")
+    page.get_by_label("Training episodes (max 3000)").fill("50")
+    page.get_by_label("Training episodes (max 3000)").blur()
+    page.get_by_role("button", name="Train from scratch").click()
+    page.wait_for_selector("text=Finished 50 episodes")
+    time.sleep(1)                                              # the saved copy is written shortly after a change
+    page.reload()
+    page.wait_for_selector("main .syn-banner")
+    page.wait_for_selector("text=Trained in the RL Lab: 50 episodes")
+    page.wait_for_selector("text=Q-updates")                  # the (small) training log was restored too: curves are back
+    page.get_by_role("button", name="Reset session").click()
+    page.wait_for_selector("text=Precomputed reference agents")
+    time.sleep(1)
+    page.reload()
+    page.wait_for_selector("text=Precomputed reference agents")
+    assert page.errors == [], page.errors
+
+
+def test_keyboard_shortcuts_on_the_simulation_page(page):
+    go(page, "/simulation")
+    page.wait_for_selector("text=step 100/100")
+    page.get_by_role("button", name="Reset", exact=True).click()
+    page.wait_for_selector("text=step 0/100")
+    page.locator("main").click(position={"x": 5, "y": 5})
+    page.keyboard.press("ArrowRight")
+    page.wait_for_selector("text=step 1/100")
+    page.keyboard.press("r")
+    page.wait_for_selector("text=step 0/100")
+    assert page.errors == [], page.errors

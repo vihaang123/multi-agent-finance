@@ -45,11 +45,11 @@ function Two({ left, right }: { left: ReactNode; right: ReactNode }) {
 
 function BigPicture() {
   const steps = [
-    ["1. Each agent sees its own state s", "regime + its own weights", "#eef4fd"],
-    ["2. Pick an action a", "one of 7 baskets; epsilon-greedy on Q(s, .)", "#eef4fd"],
-    ["3. Shared market", "rebalance + trading costs, crowding impact on equity, returns drawn for the regime", "#fff6e0"],
-    ["4. Reward and next state", "each agent gets its own reward r and next state s'", "#e8f6f0"],
-    ["5. Update own Q-table", "Q(s,a) <- Q + alpha*(r + gamma*max Q(s') - Q)", "#e8f6f0"],
+    ["1. Each agent sees its own state s", "regime + its own weights", "note"],
+    ["2. Pick an action a", "one of 7 baskets; epsilon-greedy on Q(s, .)", "note"],
+    ["3. Shared market", "rebalance + trading costs, crowding impact on equity, returns drawn for the regime", "warn"],
+    ["4. Reward and next state", "each agent gets its own reward r and next state s'", "ok"],
+    ["5. Update own Q-table", "Q(s,a) <- Q + alpha*(r + gamma*max Q(s') - Q)", "ok"],
   ];
   return (
     <div className="stack">
@@ -57,9 +57,9 @@ function BigPicture() {
 
 **The twist.** Instead of one decision-maker we have **four agents**, each with its own personality (Growth, Conservative, Balanced, RiskLiquidity) and its own Rs 2,50,000. They all trade in the **same** market and all learn **by trial and error**.`} />
       <div className="flow" aria-label="One step of the learning loop">
-        {steps.map(([t, b, bg], i) => (
+        {steps.map(([t, b, tone], i) => (
           <div key={t} style={{ display: "contents" }}>
-            <div className="step" style={{ background: bg }}><b>{t}</b><br />{b}</div>
+            <div className={`step ${tone}`}><b>{t}</b><br />{b}</div>
             {i < steps.length - 1 ? <span className="arrow" aria-hidden>→</span> : <span className="arrow" aria-hidden title="next step">↺</span>}
           </div>
         ))}

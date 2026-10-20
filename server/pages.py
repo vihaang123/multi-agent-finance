@@ -98,7 +98,35 @@ def dashboard_blocks(sim) -> List[dict]:
                        f"the market then moved to **{_regime_name(last['next_regime'])}**."),
                   B.table(rows, ["Agent", "Basket chosen", "Equity/Bonds/Gold/Cash", "Step reward", "Sleeve value"])]
     out.append(B.tabs(("Allocation over time", [alloc]), ("Return & risk by agent", ret_risk), ("Latest step", latest)))
+    out.extend(scoreboard_blocks())
     return out
+
+
+def scoreboard_blocks() -> List[dict]:
+    """Where the learning ended up: the four experiments of the precomputed reference run, return against risk.
+    Everything comes from data/reference_results.json (a real 5,000-episode run), never typed in."""
+    ref = reference.load_reference_results()
+    if not ref:
+        return []
+    res = ref["experiments"]
+    pts, colors = {}, {}
+    for e in "ABCD":
+        if e in res:
+            c = res[e]["summary"]["combined"]
+            pts[SHORT[e]] = dict(ret=c["total_return_mean"], ret_std=c["total_return_std"], dd=c["max_drawdown_mean"])
+            colors[SHORT[e]] = theme.EXPERIMENT_COLORS[e]
+    if not pts:
+        return []
+    m = ref["meta"]
+    lines = reading(res)
+    return [
+        B.heading("Where the learning ended up", 3),
+        B.caption(f"Reference run: {m['train_episodes']:,} training episodes, then {cfg.N_EVAL_EPISODES} unseen markets with "
+                  "learning switched off. Synthetic data."),
+        B.columns([B.plot(charts.scoreboard_chart(pts, colors))],
+                  [B.md("\n".join(f"- {line}" for line in lines[:3])),
+                   B.caption("Full table, distributions and training curves are on the Experiments page.")], weights=[1.3, 1]),
+    ]
 
 
 # =========================================================================== #

@@ -93,7 +93,7 @@ export default function RlLabPage() {
   const tabs = ["Learning curves", "Q-table inspector", "Policy maps", "Update walkthrough", "Evaluate (out-of-sample)"];
   const lab = agents.source === "lab";
 
-  const curves = useBlocksQuery("/api/lab/curves", tab === 0, () => ({ agents: agents.state, log: lab ? agents.log : null, smooth }), [tab, agents.state, agents.totalEpisodes, smooth]);
+  const curves = useBlocksQuery("/api/lab/curves", tab === 0 && !(lab && !agents.log), () => ({ agents: agents.state, log: lab ? agents.log : null, smooth }), [tab, agents.state, agents.totalEpisodes, smooth]);
   const insp = useBlocksQuery("/api/lab/inspect", tab === 1, () => ({ agents: agents.state, ...inspect }), [tab, agents.state, inspect.agent, inspect.regime, inspect.eq, inspect.bond, inspect.gold]);
   const heatQ = useBlocksQuery("/api/lab/policy", tab === 2, () => ({ agents: agents.state, ...heat }), [tab, agents.state, heat.agent, heat.mode]);
   const walk = useAction<{ blocks: Block[] }>();
@@ -144,7 +144,14 @@ export default function RlLabPage() {
           {lab && agents.log ? (
             <div style={{ maxWidth: 420 }}><SliderField label="Smoothing window (episodes)" value={smooth} min={1} max={200} step={1} onChange={setSmooth} /></div>
           ) : null}
-          <QueryBlocks q={curves} />
+          {lab && !agents.log ? (
+            <div className="callout note">
+              The learning curves of an earlier session are not kept after a reload. The trained agents are still active; press <b>Continue training</b> to
+              extend them, or <b>Train from scratch</b> to see fresh curves.
+            </div>
+          ) : (
+            <QueryBlocks q={curves} />
+          )}
         </div>
       ) : null}
 

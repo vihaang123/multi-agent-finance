@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Block, Kpi } from "@/lib/types";
+import { useStore } from "@/lib/store";
 import { Inline, Markdown } from "./Markdown";
 import { Plot } from "./Plot";
 
@@ -19,6 +20,42 @@ function KpiCard({ k }: { k: Kpi }) {
         )}
       </div>
       {k.sub ? <div className="sub">{k.sub}</div> : null}
+    </div>
+  );
+}
+
+function TableView({ b }: { b: Extract<Block, { type: "table" }> }) {
+  const { meta } = useStore();
+  const colors = meta?.agent_colors ?? {};
+  return (
+    <div className="table-wrap">
+      <div className="table-scroll" style={b.max_height ? { maxHeight: b.max_height } : undefined}>
+        <table>
+          <thead>
+            <tr>
+              {b.columns.map((c, i) => (
+                <th key={i}>{c}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {b.rows.map((r, i) => (
+              <tr key={i}>
+                {r.map((v, j) => {
+                  const dot = j === 0 && typeof v === "string" ? colors[v] : undefined;
+                  return (
+                    <td key={j} className={j === 0 ? "first" : undefined}>
+                      {dot ? <span className="agent-dot" style={{ background: dot }} /> : null}
+                      {fmt(v)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {b.caption ? <p className="caption" style={{ marginTop: ".4rem" }}>{b.caption}</p> : null}
     </div>
   );
 }
@@ -49,11 +86,18 @@ function Download({ b }: { b: Extract<Block, { type: "download" }> }) {
 function Tabs({ tabs }: { tabs: { label: string; blocks: Block[] }[] }) {
   const [i, setI] = useState(0);
   const idx = Math.min(i, tabs.length - 1);
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    e.preventDefault();
+    const next = (idx + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    setI(next);
+    (e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
+  };
   return (
     <div className="tabs">
-      <div className="tablist" role="tablist">
+      <div className="tablist" role="tablist" onKeyDown={onKey}>
         {tabs.map((t, j) => (
-          <button key={t.label} role="tab" aria-selected={j === idx} className={j === idx ? "tab active" : "tab"} onClick={() => setI(j)}>
+          <button key={t.label} role="tab" aria-selected={j === idx} tabIndex={j === idx ? 0 : -1} className={j === idx ? "tab active" : "tab"} onClick={() => setI(j)}>
             {t.label}
           </button>
         ))}
@@ -117,33 +161,7 @@ export function BlockView({ b }: { b: Block }) {
     case "plot":
       return <Plot figure={b.figure} />;
     case "table":
-      return (
-        <div className="table-wrap">
-          <div className="table-scroll" style={b.max_height ? { maxHeight: b.max_height } : undefined}>
-            <table>
-              <thead>
-                <tr>
-                  {b.columns.map((c, i) => (
-                    <th key={i}>{c}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {b.rows.map((r, i) => (
-                  <tr key={i}>
-                    {r.map((v, j) => (
-                      <td key={j} className={j === 0 ? "first" : undefined}>
-                        {fmt(v)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {b.caption ? <p className="caption">{b.caption}</p> : null}
-        </div>
-      );
+      return <TableView b={b} />;
     case "columns":
       return (
         <div className="cols" style={{ gridTemplateColumns: b.cols.map((c) => `minmax(0, ${c.weight}fr)`).join(" ") }}>
@@ -162,7 +180,7 @@ export function BlockView({ b }: { b: Block }) {
       return (
         <div className="card-grid">
           {b.items.map((c) => (
-            <div key={c.title} className="card">
+            <div key={c.title} className="card" style={{ ["--dot" as string]: c.color ?? "var(--line2)" }}>
               <h4>
                 <span className="agent-dot" style={{ background: c.color ?? "#2a78d6" }} />
                 {c.title} {c.tag ? <span className="small muted">- {c.tag}</span> : null}

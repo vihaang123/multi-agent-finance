@@ -52,6 +52,7 @@ export type Meta = {
   limits: { lab_max_episodes: number; ui_max_episodes: number; chunk_episodes: number };
   reference: { available: boolean; label: string; meta: Record<string, unknown> | null };
   sharpe_note: string;
+  state_version: number;
 };
 
 export type PolicyKind = "trained" | "random" | "fixed";
@@ -70,6 +71,7 @@ export type SimResponse = {
   done: boolean;
   episode_length: number;
   steps: Step[];
+  regimes: number[];
   seed: number;
   summary_line: string;
   regime_now: string;

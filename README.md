@@ -8,10 +8,10 @@ RiskLiquidity) split Rs 10,00,000 across **Equity / Bonds / Gold / Cash** inside
 > (`environment/market.py`). Nothing here is real market data, investment advice or a prediction, and results are not
 > real-world performance. The project has **no** real-money trading and **no** broker connection.
 
-**Status:** the code is pushed to this repository and was tested locally (see [Tests](#tests)). It has **not been deployed
-to Vercel yet**: the attempt to create the Vercel project from the authoring environment was refused (HTTP 403, no access to
-the account scope), so there is no live URL. Follow [DEPLOYMENT.md](DEPLOYMENT.md) (about five minutes, no environment
-variables). Behaviour on real Vercel (cold start, bundle size, function timing) is therefore **unverified**.
+**Status:** deployed on Vercel at <https://multi-agent-finance-eight.vercel.app/> (project linked to this GitHub repository, so every
+push to `main` redeploys). The deployment was checked by hand in Chrome page by page (Dashboard, Simulation, RL Lab training and
+evaluation, Analytics, Experiments live run, Learn) on the version before the redesign. The redesign described below was tested
+locally (see "Tests" for exactly what was run). See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ---
 
@@ -39,6 +39,16 @@ LOCAL_API_URL=http://127.0.0.1:8000 npm run dev           # terminal 2: http://l
 ```
 On Windows PowerShell set the variable with `$env:LOCAL_API_URL="http://127.0.0.1:8000"; npm run dev`.
 Tested with Python 3.13, FastAPI 0.143, Plotly 7.1, NumPy 2.5, pandas 3.0, Node/Next.js 16.4.
+
+## Interface notes
+- **Regime ribbon:** a strip on the Dashboard and Simulation pages (and a mini one in the sidebar) shows the market regime of every step
+  played (Bear / Neutral / Bull / HighVol) with a playhead; the same colours shade every chart. Colour in the interface is reserved for
+  data (agents, regimes, assets); everything else is neutral.
+- **Light and dark themes** (Auto follows the system) with charts re-coloured to match; responsive down to phone width.
+- **Your session is kept in this browser:** the agents you trained, the episode you were on and (for logs up to ~1 MB) the learning
+  curves survive a reload. *Reset session* in the sidebar forgets them. Nothing is stored on the server.
+- **Keyboard on the Simulation page:** Space play/pause, Right arrow one step, R reset.
+- **Dashboard scoreboard:** "Where the learning ended up" plots return against risk for experiments A-D from the precomputed reference run.
 
 ## What is in the dashboard
 
@@ -95,7 +105,7 @@ episodes. Sharpe is **episode-scale, not annualised**.
 
 ## Repository layout
 ```
-app/ components/ lib/       Next.js front end (pages: Dashboard, Simulation, RL Lab, Analytics, Experiments, Learn)
+app/ components/ lib/       Next.js front end (pages: Dashboard, Simulation, RL Lab, Analytics, Experiments, Learn; theme, saved session)
 api/index.py                Vercel Python entry point (imports the FastAPI app)
 server/                     app.py (endpoints), trainstate.py (portable training state), blocks.py, pages.py (UI blocks)
 dashboard/                  session.py (replayable simulation), charts.py (Plotly), views.py, theme.py, reference.py, lab_tools.py
@@ -125,14 +135,16 @@ npm run typecheck && npm run build          # front end
 # browser tests (need the app running, see tests/e2e/test_browser.py):
 E2E_BASE_URL=http://localhost:3000 pytest tests/e2e -q
 ```
-What was actually run in the authoring environment: `pytest -q` -> **138 passed, 11 skipped** (the 11 skipped are the browser
-tests when no server is configured); the 11 Playwright browser tests passed against a local uvicorn + `next start`;
-`tsc --noEmit` and `next build` passed. **Not run:** anything against a real Vercel deployment.
+What was actually run in the authoring environment for the redesign commit: `pytest -q` -> **138 passed, 15 skipped** (the 15 skipped are the
+browser tests when no server is configured); the **15 Playwright browser tests passed** against a local uvicorn + `next start`
+(they cover every page, simulation controls and keyboard shortcuts, RL Lab training / continue / inspect / walkthrough / evaluate / restore,
+analytics, experiments, learn calculators, theme persistence, reload persistence and a no-horizontal-scroll check at phone width);
+`tsc --noEmit` and `next build` passed.
 
 ## Known limitations
 - Tabular Q-learning, 7 predefined baskets and coarse buckets: simple by design, no generalisation across states.
 - No role specialization emerges (see above). Shared / hybrid rewards, a shared capital pool, reward ablations and hyper-parameter
   sweeps are **not** implemented.
 - Live training in the app is capped (3,000 episodes in the RL Lab, 50 episodes per request) because Vercel functions are time-limited.
-  Trained agents live in the browser tab only: reloading the page resets to the precomputed reference agents.
-- Not yet deployed to Vercel (see Status).
+  Trained agents are kept in this browser (localStorage), not on the server: another browser or device starts from the precomputed
+  reference agents.

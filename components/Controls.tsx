@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { useStore } from "@/lib/store";
 import { Blocks as BlocksLazy } from "./Blocks";
 
 export function Field({ label, help, children }: { label: string; help?: string; children: ReactNode }) {
@@ -102,9 +103,11 @@ export function Button({
 export function Progress({ value, text }: { value: number; text?: string }) {
   const pct = Math.max(0, Math.min(1, value)) * 100;
   return (
-    <div className="progress" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
-      <div className="bar" style={{ width: `${pct}%` }} />
-      {text ? <div className="ptext">{text}</div> : null}
+    <div className="progress-wrap">
+      {text ? <div className="progress-text">{text}</div> : null}
+      <div className="progress" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label={text ?? "Progress"}>
+        <div className="bar" style={{ width: `${pct}%` }} />
+      </div>
     </div>
   );
 }
@@ -126,15 +129,45 @@ export function Spinner({ text = "Working..." }: { text?: string }) {
   );
 }
 
+/** Placeholder shown while a page's first answer is on its way. */
+export function Skeleton({ text = "Loading..." }: { text?: string }) {
+  return (
+    <div className="stack" role="status" aria-label={text}>
+      <div className="skel skel-kpis" />
+      <div className="skel skel-plot" />
+      <p className="caption">{text}</p>
+    </div>
+  );
+}
+
+/** Error message. When the problem looks like a bad saved training state it offers a one-click way back. */
 export function ErrorBox({ message }: { message: string | null }) {
-  return message ? <div className="callout error" role="alert">{message}</div> : null;
+  const { agents, restoreReference } = useStore();
+  if (!message) return null;
+  const stateProblem = agents.source === "lab" && /state|agents|layout|version|shape|truncated|decode/i.test(message);
+  return (
+    <div className="callout error" role="alert">
+      {message}
+      {stateProblem ? (
+        <button type="button" className="btn" onClick={restoreReference}>Switch back to the reference agents</button>
+      ) : null}
+    </div>
+  );
 }
 
 export function TabBar({ tabs, active, onChange }: { tabs: string[]; active: number; onChange: (i: number) => void }) {
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    e.preventDefault();
+    const next = (active + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    onChange(next);
+    const buttons = (e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[role="tab"]');
+    buttons[next]?.focus();
+  };
   return (
-    <div className="tablist" role="tablist">
+    <div className="tablist" role="tablist" onKeyDown={onKey}>
       {tabs.map((t, i) => (
-        <button key={t} role="tab" aria-selected={i === active} className={i === active ? "tab active" : "tab"} onClick={() => onChange(i)}>
+        <button key={t} role="tab" aria-selected={i === active} tabIndex={i === active ? 0 : -1} className={i === active ? "tab active" : "tab"} onClick={() => onChange(i)}>
           {t}
         </button>
       ))}
@@ -147,7 +180,7 @@ export function QueryBlocks({ q, empty }: { q: { blocks: import("@/lib/types").B
   return (
     <div className="stack">
       <ErrorBox message={q.error} />
-      {q.loading && !q.blocks ? <Spinner text="Computing..." /> : null}
+      {q.loading && !q.blocks ? <Skeleton text="Computing..." /> : null}
       {q.blocks ? <div style={{ opacity: q.loading ? 0.55 : 1, transition: "opacity .15s" }}><BlocksLazy blocks={q.blocks} /></div> : !q.loading && !q.error && empty ? <p className="caption">{empty}</p> : null}
     </div>
   );

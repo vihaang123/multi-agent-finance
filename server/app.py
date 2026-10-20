@@ -127,7 +127,7 @@ def meta():
                         "epsilon_min": cfg.EPSILON_MIN, "epsilon_decay": cfg.EPSILON_DECAY, "q_init": cfg.Q_INIT_VALUE},
         "limits": {"lab_max_episodes": MAX_LAB_EPISODES, "ui_max_episodes": MAX_UI_EPISODES, "chunk_episodes": MAX_CHUNK_EPISODES},
         "reference": {"available": bool(ref), "label": reference.reference_label(), "meta": ref["meta"] if ref else None},
-        "sharpe_note": metrics.SHARPE_METHODOLOGY_NOTE,
+        "sharpe_note": metrics.SHARPE_METHODOLOGY_NOTE, "state_version": trainstate.BLOB_VERSION,
     })
 
 
@@ -177,7 +177,7 @@ def simulate(req: SimReq):
         "t": sim.t, "done": sim.done, "episode_length": sim.episode_length, "steps": sim.steps, "seed": sim.seed,
         "summary_line": sim.summary_line(), "regime_now": cfg.REGIME_NAMES[sim.current_regime],
         "regime_color": theme.REGIME_COLORS[cfg.REGIME_NAMES[sim.current_regime]],
-        "total_value": float(sim.capital_series()[-1]), "total_value_text": theme.inr(float(sim.capital_series()[-1])),
+        "regimes": [int(r) for r in sim.regime_path()], "total_value": float(sim.capital_series()[-1]), "total_value_text": theme.inr(float(sim.capital_series()[-1])),
         "agents_label": label, "blocks": blks,
     })
 

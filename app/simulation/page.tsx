@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Blocks } from "@/components/Blocks";
-import { Button, Checkbox, ErrorBox, NumberField, Progress, Radio, SelectField, SliderField, Spinner } from "@/components/Controls";
+import { Button, Checkbox, ErrorBox, NumberField, Radio, SelectField, SliderField, Skeleton } from "@/components/Controls";
 import { PageHeader } from "@/components/PageHeader";
+import { RegimeRibbon } from "@/components/RegimeRibbon";
 import { useSimulation } from "@/lib/hooks";
 import { inr } from "@/lib/log";
 import { useMeta, useStore } from "@/lib/store";
@@ -46,6 +47,31 @@ export default function SimulationPage() {
   }, [playing, done, resp, busy, speed, latency, call]);
 
   const stop = () => setPlaying(false);
+  const canMove = !done && !busy && !!resp;
+  const shortcut = useRef<(k: string) => void>(() => {});
+  shortcut.current = (k) => {
+    if (k === " ") {
+      if (playing) stop();
+      else if (canMove && !playing) setPlaying(true);
+    } else if (k === "ArrowRight") {
+      if (canMove) { stop(); void call({ advance: 1 }); }
+    } else if (k === "r" || k === "R") {
+      if (!busy) { stop(); void call({ sim: { ...sim, steps: [] } }); }
+    }
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (el && (/^(INPUT|SELECT|TEXTAREA|BUTTON|SUMMARY|A)$/.test(el.tagName) || el.isContentEditable)) return;
+      if (e.key === " " || e.key === "ArrowRight" || e.key === "r" || e.key === "R") {
+        if (e.key !== "r" && e.key !== "R") e.preventDefault();
+        shortcut.current(e.key);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const roleName = (i: number) => meta.roles[String(meta.agent_ids[i])];
 
   return (
@@ -99,21 +125,30 @@ export default function SimulationPage() {
         <Button disabled={done || busy || !resp} onClick={() => { stop(); void call({ toEnd: true }); }}>Run to end</Button>
         <Button disabled={busy} onClick={() => { stop(); void call({ sim: { ...sim, steps: [] } }); }}>Reset</Button>
       </div>
-      <div style={{ maxWidth: 420 }}>
-        <SliderField label="Auto-play speed (steps per second)" value={speed} min={0.5} max={5} step={0.5} onChange={setSpeed} />
+      <div className="row-top">
+        <div style={{ width: "min(420px, 100%)" }}>
+          <SliderField label="Auto-play speed (steps per second)" value={speed} min={0.5} max={5} step={0.5} onChange={setSpeed} />
+        </div>
+        <p className="caption kbd-hint" style={{ margin: 0 }}>
+          Keys: <span className="kbd">Space</span> play or pause, <span className="kbd">&rarr;</span> one step, <span className="kbd">R</span> reset.
+        </p>
       </div>
 
       <ErrorBox message={error} />
       {resp ? (
-        <div className="grid g3" style={{ alignItems: "center" }}>
-          <Progress value={t / resp.episode_length} text={resp.summary_line} />
-          <div>
-            {done ? "Episode complete" : (<>Next step&apos;s regime: <span className="pill" style={{ background: resp.regime_color }}>{resp.regime_now}</span></>)}
+        <div className="stack" style={{ gap: ".7rem" }}>
+          <RegimeRibbon regimes={resp.regimes} total={resp.episode_length} />
+          <div className="status-row">
+            <span><b>{resp.summary_line}</b></span>
+            <span>
+              {done ? "Episode complete" : (<>Next step&apos;s regime: <span className="pill" style={{ background: resp.regime_color }}>{resp.regime_now}</span></>)}
+            </span>
+            <span>Status: <span className={playing ? "state-chip running" : "state-chip"}>{playing ? "RUNNING" : done ? "DONE" : "PAUSED / READY"}</span></span>
+            <span>Total: <b>{inr(resp.total_value)}</b></span>
           </div>
-          <div>Status: <b>{playing ? "RUNNING" : done ? "DONE" : "PAUSED / READY"}</b> &nbsp; Total: <b>{inr(resp.total_value)}</b></div>
         </div>
       ) : (
-        <Spinner text="Starting the simulation..." />
+        <Skeleton text="Starting the simulation..." />
       )}
       <Radio<View> name="simview" value={view} options={VIEWS} onChange={setView} />
       <div style={{ opacity: busy && resp && !playing ? 0.6 : 1, transition: "opacity .15s" }}>

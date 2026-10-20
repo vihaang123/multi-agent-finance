@@ -3,9 +3,9 @@
 The app is a Next.js project (front end) with one Python serverless function (`api/index.py`, FastAPI). Vercel detects both
 automatically. No environment variables are needed.
 
-> **Status:** not deployed yet. Creating the Vercel project from the authoring environment failed with HTTP 403 (the connector
-> had no access to the account scope), so these steps have **not** been run end to end on Vercel. Local behaviour is tested;
-> Vercel-specific behaviour (cold start, Python bundle size, timings) is unverified. Check the "Verify" section after you deploy.
+> **Status:** deployed at <https://multi-agent-finance-eight.vercel.app/> (Vercel project linked to the GitHub repository `vihaang123/multi-agent-finance`; pushes
+> to `main` redeploy automatically). The checklist below was run by hand in Chrome against that URL. Build logs and runtime logs were
+> not inspected (the connector used for testing had no access to the Vercel account), so check them in the Vercel dashboard if anything misbehaves.
 
 ## Steps (dashboard)
 
@@ -44,7 +44,7 @@ vercel --prod
 - **Cold starts:** the first request after idle time imports numpy/pandas/plotly and loads the reference; expect a few seconds.
 - **Time limit:** if training chunks time out on a slower CPU, lower the `CHUNK` constant in `app/rl-lab/page.tsx` and `app/experiments/page.tsx` or raise
   `maxDuration` on a paid plan.
-- **Statelessness:** trained agents exist only in the browser tab; refreshing resets to the precomputed reference.
+- **Statelessness:** the server keeps nothing. Trained agents are saved in the visitor's own browser (localStorage); *Reset session* in the sidebar clears them.
 
 ## Local development
 ```bash

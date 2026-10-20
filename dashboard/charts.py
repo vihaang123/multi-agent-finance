@@ -248,6 +248,23 @@ def risk_return_scatter(points: Dict[str, tuple], colors: Dict[str, str], height
     return _base(fig, height, "Risk vs return", ytitle="Total return (%)", xtitle="Volatility (std of step return, %)")
 
 
+def scoreboard_chart(points: Dict[str, dict], colors: Dict[str, str], height: int = 340) -> go.Figure:
+    """Return vs risk per experiment. points[name] = dict(ret, ret_std, dd) as FRACTIONS (0.03 = 3%)."""
+    fig = go.Figure()
+    for name, p in points.items():
+        fig.add_trace(go.Scatter(
+            x=[p["dd"] * 100], y=[p["ret"] * 100], mode="markers+text", name=name, text=[name.split(" ")[0]],
+            textposition="middle center", textfont=dict(color="#ffffff", size=12),
+            marker=dict(size=30, color=colors.get(name, theme.ACCENT), line=dict(color="#fcfcfb", width=2)),
+            error_y=dict(type="data", array=[p["ret_std"] * 100], visible=True, thickness=1.2, width=4,
+                         color=colors.get(name, theme.ACCENT)),
+            hovertemplate=name + "<br>return %{y:.2f}% (+/- " + f"{p['ret_std'] * 100:.2f}" + ")<br>max drawdown %{x:.2f}%<extra></extra>"))
+    fig.add_hline(y=0, line=dict(color=theme.INK_3, width=1, dash="dot"))
+    fig.update_layout(hovermode="closest")
+    return _base(fig, height, "Return against risk, held-out episodes", legend=True,
+                 ytitle="Mean return (%), bars show +/- 1 std", xtitle="Average max drawdown (%) - further left is safer")
+
+
 def returns_box(returns_by_name: Dict[str, Sequence[float]], colors: Dict[str, str], title="Distribution of episode returns across held-out seeds (%)", height=340):
     fig = go.Figure()
     for name, r in returns_by_name.items():

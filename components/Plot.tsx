@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { recolour, useResolvedTheme } from "@/lib/theme";
 import type { PlotFigure } from "@/lib/types";
 
 // Plotly is loaded on demand in the browser only (it is large and needs the DOM).
@@ -48,7 +49,9 @@ function adaptLayout(layout: Layout, width: number): Layout {
   return out;
 }
 
-export function Plot({ figure }: { figure: PlotFigure }) {
+export function Plot({ figure: raw }: { figure: PlotFigure }) {
+  const theme = useResolvedTheme();
+  const figure = useMemo(() => recolour(raw, theme), [raw, theme]);
   const ref = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   const [width, setWidth] = useState(1000);

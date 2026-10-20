@@ -9,7 +9,7 @@ export type SimView = "dashboard" | "overview" | "decisions" | "money" | "log" |
 
 /** Rebuild-and-advance the simulation on the server and keep the page's blocks in sync. */
 export function useSimulation(view: SimView, volWindow = 10) {
-  const { sim, setSim, agents, meta } = useStore();
+  const { sim, setSim, agents, meta, setLive } = useStore();
   const [resp, setResp] = useState<SimResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +39,7 @@ export function useSimulation(view: SimView, volWindow = 10) {
         });
         if (id !== seq.current) return null;
         setResp(r);
+        setLive({ t: r.t, total: r.total_value, regimes: r.regimes, regimeNow: r.regime_now });
         setLatency(performance.now() - t0);
         setSim((prev) => ({ ...prev, seed: s.seed, impact: s.impact, steps: r.steps }));
         return r;
@@ -49,7 +50,7 @@ export function useSimulation(view: SimView, volWindow = 10) {
         if (id === seq.current) setBusy(false);
       }
     },
-    [view, volWindow, agents.state, setSim],
+    [view, volWindow, agents.state, setSim, setLive],
   );
 
   // (Re)load whenever the view, the active agents or the analytics window change. A missing episode is played to the end once.
